@@ -1,37 +1,26 @@
-"""
-app.core.security
-==================
-Password hashing and JWT issuance/verification for the single-manager-class
-auth model. No user roles, no refresh tokens — deliberately minimal for an
-internal tool with one class of authenticated user.
-"""
-
-from __future__ import annotations
-
 from datetime import datetime, timedelta, timezone
-
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-
 from app.core.config import settings
+
+# Define token scope
+TOKEN_SCOPE = "manager"
+UTC = timezone.utc
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-TOKEN_SCOPE = "pm_tracker"
-
+def _truncate_password(password: str) -> str:
+    """Safely truncate password to 72 bytes to satisfy bcrypt and passlib limits."""
+    if isinstance(password, str):
+        return password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
+    return password
 
 def hash_password(password: str) -> str:
-    # Truncate password to 72 bytes to prevent bcrypt ValueError
-    if isinstance(password, str):
-        password = password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
-    return _pwd_context.hash(password)
+    return _pwd_context.hash(_truncate_password(password))
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    # Truncate password to 72 bytes to prevent bcrypt ValueError
-    if isinstance(password, str):
-        password = password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
-    return _pwd_context.verify(password, password_hash)
+    return _pwd_context.verify(_truncate_password(password), password_hash)
 
 
 def issue_manager_token(manager: dict) -> str:
