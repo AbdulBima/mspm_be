@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
+# Define UTC for Python 3.10 compatibility
+UTC = timezone.utc
+
 
 def now() -> datetime:
     """Current time as naive UTC — Mongo stores everything naive here;
