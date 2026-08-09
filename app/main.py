@@ -68,7 +68,7 @@ def create_app() -> FastAPI:
     # correct way to allow "anything" only in development.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=origins,
         allow_origin_regex=".*" if settings.is_dev else None,
         allow_credentials=True,
         allow_methods=["*"],
