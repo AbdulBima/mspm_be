@@ -59,7 +59,8 @@ def create_app() -> FastAPI:
 
     origins = [
         "https://mspmfe.mymently.com",
-        "http://localhost:3000", # for local dev if needed
+        "http://localhost:3000",
+        "http://localhost:3012",
     ]
 
     # allow_origins=["*"] combined with allow_credentials=True violates the
