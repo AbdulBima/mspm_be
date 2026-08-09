@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - uses: pre-commit/action@v3.0.1
+
+  test:
+    runs-on: ubuntu-latest
+    needs: pre-commit
+    # No `services: mongo` block — conftest.py mocks ensure_indexes() and
+    # ping() for every test, so the suite never opens a real DB connection.
+    # Add a mongo service container back here if/when real integration
+    # tests are introduced (see the `integration` marker note in
+    # pyproject.toml).
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - run: pytest --cov=app --cov-report=term-missing
+        # No env overrides needed — conftest.py's os.environ.setdefault()
+        # calls already supply working test values for MONGO_URI,
+        # DATABASE_NAME, SECRET_KEY, and ENV.

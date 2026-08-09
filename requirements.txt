@@ -1,0 +1,15 @@
+fastapi==0.136.3
+uvicorn[standard]==0.34.0
+motor==3.7.1
+pydantic==2.10.6
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+passlib[bcrypt]==1.7.4
+python-jose==3.5.0
+groq==0.16.0
+reportlab==4.4.10
+# Required at runtime by pydantic's EmailStr (used in schemas/auth.py and
+# schemas/members.py) — previously missing, so any request touching an
+# email field would raise ImportError the first time it was validated.
+email-validator==2.2.0
+pre-commit==4.0.1

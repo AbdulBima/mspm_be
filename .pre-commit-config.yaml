@@ -1,0 +1,83 @@
+# See https://pre-commit.com for full documentation.
+#
+# Local install:
+#   pip install -r requirements-dev.txt
+#   pre-commit install                       # runs on every `git commit`
+#   pre-commit install --hook-type pre-push  # runs the slower test hook on push
+#   pre-commit run --all-files               # first full pass over the repo
+
+default_language_version:
+  python: python3.11
+
+repos:
+  # ---- generic file hygiene ------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=1000"]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: debug-statements
+      - id: detect-private-key
+
+  # ---- secret scanning -------------------------------------------------
+  # Catches committed .env files, DB URIs, JWT signing keys, etc. before
+  # they leave a laptop. Worth having given passlib/jose + Mongo creds here.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.0
+    hooks:
+      - id: gitleaks
+
+  # ---- lint + import sorting (ruff) -------------------------------------
+  # Keep this version in sync with the ruff pin in requirements-dev.txt.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        # Not running ruff-format here — black is the formatter of record
+        # since it's already pinned in requirements-dev.txt. Enable
+        # ruff-format instead and drop the black hook below if you'd
+        # rather standardize on ruff for both.
+
+  # ---- formatting --------------------------------------------------------
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+
+  # ---- static typing -------------------------------------------------
+  # Uses `language: system` so mypy runs inside your project's own venv
+  # and can actually resolve fastapi/pydantic/motor types, rather than
+  # pre-commit's isolated hook environment.
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+        args: [app, main.py]
+
+  # ---- tests -----------------------------------------------------------
+  # Full suite runs in CI. Locally, only run on push (not every commit),
+  # so a slow test doesn't block every commit. No `-m "not integration"`
+  # filter for now — nothing in the suite is marked "integration" yet
+  # (see tests/conftest.py: DB calls are mocked, so the whole suite is
+  # already fast). Add the marker + filter back if that changes.
+  - repo: local
+    hooks:
+      - id: pytest-fast
+        name: pytest
+        entry: pytest -q
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
