@@ -56,6 +56,12 @@ def create_app() -> FastAPI:
             "requests will be rejected until it's set."
         )
 
+
+    origins = [
+        "https://mspmfe.mymently.com",
+        "http://localhost:3000", # for local dev if needed
+    ]
+
     # allow_origins=["*"] combined with allow_credentials=True violates the
     # CORS spec (browsers reject it outright); allow_origin_regex is the
     # correct way to allow "anything" only in development.
