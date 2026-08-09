@@ -21,10 +21,16 @@ TOKEN_SCOPE = "pm_tracker"
 
 
 def hash_password(password: str) -> str:
+    # Truncate password to 72 bytes to prevent bcrypt ValueError
+    if isinstance(password, str):
+        password = password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
     return _pwd_context.hash(password)
 
 
 def verify_password(password: str, password_hash: str) -> bool:
+    # Truncate password to 72 bytes to prevent bcrypt ValueError
+    if isinstance(password, str):
+        password = password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
     return _pwd_context.verify(password, password_hash)
 
 
