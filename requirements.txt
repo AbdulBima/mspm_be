@@ -5,6 +5,8 @@ pydantic==2.10.6
 pydantic-settings==2.7.1
 python-dotenv==1.0.1
 passlib[bcrypt]==1.7.4
+# passlib 1.7.4 breaks on bcrypt>=4.1 (removed __about__, strict 72-byte check at init).
+bcrypt==4.0.1
 python-jose==3.5.0
 groq==0.16.0
 reportlab==4.4.10
@@ -12,4 +14,6 @@ reportlab==4.4.10
 # schemas/members.py) — previously missing, so any request touching an
 # email field would raise ImportError the first time it was validated.
 email-validator==2.2.0
+# IANA timezone data for zoneinfo on hosts without a system tz database.
+tzdata==2025.2
 pre-commit==4.0.1

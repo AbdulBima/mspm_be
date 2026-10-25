@@ -1,37 +1,46 @@
 from datetime import datetime, timedelta, timezone
+
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+
 from app.core.config import settings
 
-# Define token scope
 TOKEN_SCOPE = "manager"
+MEMBER_TOKEN_SCOPE = "member"
 UTC = timezone.utc
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
 def _truncate_password(password: str) -> str:
-    """Safely truncate password to 72 bytes to satisfy bcrypt and passlib limits."""
+    """bcrypt only reads the first 72 bytes."""
     if isinstance(password, str):
         return password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
     return password
+
 
 def hash_password(password: str) -> str:
     return _pwd_context.hash(_truncate_password(password))
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return _pwd_context.verify(_truncate_password(password), password_hash)
+    try:
+        return _pwd_context.verify(_truncate_password(password), password_hash)
+    except (ValueError, TypeError):
+        return False
+
+
+def _encode(claims: dict) -> str:
+    expire = datetime.now(UTC) + timedelta(minutes=settings.pm_token_expire_minutes)
+    return jwt.encode({**claims, "exp": expire}, settings.secret_key, algorithm=settings.algorithm)
 
 
 def issue_manager_token(manager: dict) -> str:
-    expire = datetime.now(UTC) + timedelta(minutes=settings.pm_token_expire_minutes)
-    payload = {
-        "sub": manager["email"],
-        "manager_id": manager["manager_id"],
-        "exp": expire,
-        "scope": TOKEN_SCOPE,
-    }
-    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
+    return _encode({"sub": manager["email"], "manager_id": manager["manager_id"], "scope": TOKEN_SCOPE})
+
+
+def issue_member_token(account: dict) -> str:
+    return _encode({"sub": account["email"], "member_id": account["member_id"], "scope": MEMBER_TOKEN_SCOPE})
 
 
 def decode_token(token: str) -> dict:
@@ -41,9 +50,11 @@ def decode_token(token: str) -> dict:
 
 __all__ = [
     "JWTError",
+    "MEMBER_TOKEN_SCOPE",
     "TOKEN_SCOPE",
     "decode_token",
     "hash_password",
     "issue_manager_token",
+    "issue_member_token",
     "verify_password",
 ]

@@ -8,10 +8,12 @@ from __future__ import annotations
 
 from app.db.collections import (
     checkins_col,
+    daily_reports_col,
     decisions_col,
     goals_col,
     managers_col,
     meetings_col,
+    member_accounts_col,
     members_col,
     reports_col,
     risks_col,
@@ -36,3 +38,7 @@ async def ensure_indexes() -> None:
     await meetings_col.create_index([("sprint_id", 1), ("meeting_date", 1)])
     await reports_col.create_index([("sprint_id", 1), ("report_type", 1), ("created_at", -1)])
     await managers_col.create_index("email", unique=True)
+    await member_accounts_col.create_index("member_id", unique=True)
+    await member_accounts_col.create_index("email", unique=True)
+    await daily_reports_col.create_index([("member_id", 1), ("report_date", -1)], unique=True)
+    await daily_reports_col.create_index([("report_date", 1)])

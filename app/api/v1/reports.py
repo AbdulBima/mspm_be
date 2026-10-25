@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.api.deps import get_current_manager
 from app.db.collections import (
     checkins_col,
+    daily_reports_col,
     decisions_col,
     goals_col,
     meetings_col,
@@ -104,6 +105,12 @@ async def _compile_report_data(sprint: dict, start: datetime, end: datetime) -> 
         if not ai.get("done")
     ]
 
+    member_reports = (
+        await daily_reports_col.find({"report_date": {"$gte": start, "$lt": end}}, {"_id": 0})
+        .sort("report_date", 1)
+        .to_list(length=2000)
+    )
+
     blocked_now = [t for t in all_tasks if t["status"] == "blocked"]
     at_risk_checkins = [c for c in checkins if c["flag"] in ("at_risk", "blocked")]
 
@@ -151,11 +158,22 @@ async def _compile_report_data(sprint: dict, start: datetime, end: datetime) -> 
             {"type": m["meeting_type"], "date": m["meeting_date"].isoformat()} for m in meetings
         ],
         "open_action_items": action_items_open,
+        "member_daily_reports": [
+            {
+                "member_name": member_by_id.get(r["member_id"], {}).get("name", "Unknown"),
+                "date": r["report_date"].date().isoformat(),
+                "flag": r.get("flag"),
+                "summary": r["summary"][:400],
+                "blockers": r.get("blockers"),
+            }
+            for r in member_reports
+        ],
         "totals": {
             "total_tasks": len(all_tasks),
             "done_tasks": len([t for t in all_tasks if t["status"] == "done"]),
             "blocked_tasks": len(blocked_now),
             "open_risks": len(open_risks),
+            "daily_reports_filed": len(member_reports),
         },
     }
 

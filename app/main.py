@@ -50,18 +50,16 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.is_dev else None,
     )
 
-    if not settings.cors_origins and not settings.is_dev:
-        logger.warning(
-            "ALLOWED_ORIGINS is empty outside development — all cross-origin "
-            "requests will be rejected until it's set."
+    origins = list(
+        dict.fromkeys(
+            [
+                "https://mspmfe.mymently.com",
+                "http://localhost:3000",
+                "http://localhost:3012",
+                *settings.cors_origins,
+            ]
         )
-
-
-    origins = [
-        "https://mspmfe.mymently.com",
-        "http://localhost:3000",
-        "http://localhost:3012",
-    ]
+    )
 
     # allow_origins=["*"] combined with allow_credentials=True violates the
     # CORS spec (browsers reject it outright); allow_origin_regex is the
