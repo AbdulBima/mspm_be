@@ -18,7 +18,7 @@ below.
 
 - FastAPI + Motor (async MongoDB driver)
 - Pydantic v2 / pydantic-settings for validated configuration
-- JWT auth (python-jose) over a single manager/RPM account class
+- JWT auth (python-jose) for managers and team members
 - ReportLab for server-side PDF generation
 - Groq (Llama) for optional AI narrative generation — additive only; every
   endpoint that uses it still returns full structured data if it's
@@ -45,6 +45,24 @@ below.
     uvicorn main:app --reload --port 8000
 
 `/docs` and `/redoc` are only mounted when `ENV=development`.
+
+## Team member logins and daily reports
+
+- A manager gives a team member access with `POST /api/pm/members/{id}/access`
+  (or by adding an email when creating the member). The response carries a
+  one-time access code; it is stored hashed and expires after
+  `MEMBER_ACCESS_CODE_TTL_HOURS` (default 72). Issuing a new code also works
+  as a password reset. `DELETE /api/pm/members/{id}/access` removes the login.
+- The member sets a password with `POST /api/pm/auth/activate` and then signs
+  in through the same `POST /api/pm/auth/login` managers use; the response
+  says which `role` the session has.
+- Members file today's report with `PUT /api/pm/me/daily-report`. A report
+  covers one calendar day in `TEAM_TIMEZONE` (default `Africa/Lagos`) and
+  can be edited until midnight; after that the API refuses it.
+- Managers read a day with `GET /api/pm/daily-reports?report_date=YYYY-MM-DD`
+  (submitted vs missing) and a person's recent reports with
+  `GET /api/pm/daily-reports/members/{member_id}`.
+- Credentials live in `pm_member_accounts`, never on the member document.
 
 ## Running in production
 

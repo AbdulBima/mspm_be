@@ -14,7 +14,8 @@ scripts and tests that just want "give me the schemas."
 from __future__ import annotations
 
 from app.schemas.ai import AIAskRequest, AIChatTurn
-from app.schemas.auth import ManagerLoginRequest, ManagerSignupRequest
+from app.schemas.auth import LoginRequest, ManagerLoginRequest, ManagerSignupRequest, MemberActivateRequest
+from app.schemas.daily_reports import DailyReportSubmitRequest
 from app.schemas.enums import (
     AttendanceStatus,
     CheckinFlag,
@@ -54,8 +55,11 @@ from app.schemas.tracking import (
 __all__ = [
     "AIAskRequest",
     "AIChatTurn",
+    "DailyReportSubmitRequest",
+    "LoginRequest",
     "ManagerLoginRequest",
     "ManagerSignupRequest",
+    "MemberActivateRequest",
     "AttendanceStatus",
     "CheckinFlag",
     "Discipline",

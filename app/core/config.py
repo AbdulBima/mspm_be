@@ -15,8 +15,9 @@ process; tests can call `get_settings.cache_clear()` after monkeypatching
 from __future__ import annotations
 
 from functools import lru_cache
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,6 +37,10 @@ class Settings(BaseSettings):
     algorithm: str = Field("HS256", alias="ALGORITHM")
     pm_token_expire_minutes: int = Field(10080, alias="PM_TOKEN_EXPIRE_MINUTES")  # 7 days
     pm_tracker_invite_code: str | None = Field(None, alias="PM_TRACKER_INVITE_CODE")
+    member_access_code_ttl_hours: int = Field(72, alias="MEMBER_ACCESS_CODE_TTL_HOURS")
+
+    # --- Daily reports ---
+    team_timezone: str = Field("Africa/Lagos", alias="TEAM_TIMEZONE")
 
     # --- CORS ---
     allowed_origins_raw: str = Field("", alias="ALLOWED_ORIGINS")
@@ -46,6 +51,19 @@ class Settings(BaseSettings):
     @property
     def is_dev(self) -> bool:
         return self.env == "development"
+
+    @field_validator("team_timezone")
+    @classmethod
+    def _valid_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as err:
+            raise ValueError(f"TEAM_TIMEZONE '{value}' is not a valid IANA timezone") from err
+        return value
+
+    @property
+    def team_tz(self) -> ZoneInfo:
+        return ZoneInfo(self.team_timezone)
 
     @property
     def cors_origins(self) -> list[str]:

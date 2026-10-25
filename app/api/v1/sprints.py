@@ -38,6 +38,8 @@ from app.services.task_flags import is_overdue, is_stale
 
 router = APIRouter(prefix="/api/pm/sprints", tags=["pm-tracker:sprints"])
 
+_SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
 
 async def _get_sprint_or_404(sprint_id: str) -> dict:
     sprint = await sprints_col.find_one({"sprint_id": sprint_id}, {"_id": 0})
@@ -135,9 +137,15 @@ async def update_sprint(
 @router.delete("/{sprint_id}", status_code=204)
 async def delete_sprint(sprint_id: str, current_manager: dict = Depends(get_current_manager)) -> None:
     await _get_sprint_or_404(sprint_id)
+    task_ids = [
+        t["task_id"]
+        for t in await tasks_col.find({"sprint_id": sprint_id}, {"_id": 0, "task_id": 1}).to_list(length=5000)
+    ]
     await sprints_col.delete_one({"sprint_id": sprint_id})
     await goals_col.delete_many({"sprint_id": sprint_id})
     await tasks_col.delete_many({"sprint_id": sprint_id})
+    if task_ids:
+        await task_notes_col.delete_many({"task_id": {"$in": task_ids}})
     return None
 
 
@@ -342,11 +350,10 @@ async def sprint_handover(sprint_id: str, current_manager: dict = Depends(get_cu
         .to_list(length=5000)
     )
 
-    open_risks = (
-        await risks_col.find({"sprint_id": sprint_id, "status": "open"}, {"_id": 0})
-        .sort("severity", -1)
-        .to_list(length=1000)
+    open_risks = await risks_col.find({"sprint_id": sprint_id, "status": "open"}, {"_id": 0}).to_list(
+        length=1000
     )
+    open_risks.sort(key=lambda r: _SEVERITY_RANK.get(r.get("severity"), 99))
 
     meetings = await meetings_col.find({"sprint_id": sprint_id}, {"_id": 0}).to_list(length=500)
     open_action_items = [

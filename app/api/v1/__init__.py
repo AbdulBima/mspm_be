@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.v1 import ai, auth, members, reports, sprints, tasks, tracking
+from app.api.v1 import ai, auth, daily_reports, me, members, reports, sprints, tasks, tracking
 
 api_router = APIRouter()
 for _router in (
@@ -23,6 +23,8 @@ for _router in (
     tracking.router,
     reports.router,
     ai.router,
+    me.router,
+    daily_reports.router,
 ):
     api_router.include_router(_router)
 

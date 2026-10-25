@@ -2,9 +2,9 @@
 Sprint Tracker (RPM Ops) — Team Member Routes
 =================================================
 Team members are engineers/designers/QA/interns — the people whose work is
-being coordinated. They don't log in; the PM manages their tasks and notes
-on their behalf, mirroring how the RPM playbook describes reviewing "every
-team member" each morning.
+being coordinated. The PM manages their tasks and notes; members can also
+sign in (after activating with a one-time access code) to file their daily
+report.
 """
 
 from __future__ import annotations
@@ -13,8 +13,19 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pymongo import ReturnDocument
 
 from app.api.deps import get_current_manager
-from app.db.collections import checkins_col, goals_col, members_col, sprints_col, task_notes_col, tasks_col
+from app.db.collections import (
+    checkins_col,
+    daily_reports_col,
+    goals_col,
+    member_accounts_col,
+    members_col,
+    sprints_col,
+    task_notes_col,
+    tasks_col,
+)
 from app.schemas.members import MemberCreateRequest, MemberUpdateRequest
+from app.services import member_accounts
+from app.services.access_codes import normalize_email
 from app.services.clock import now
 from app.services.ids import gen_id
 from app.services.pdf import build_member_open_tasks_pdf
@@ -38,16 +49,20 @@ async def _get_member_or_404(member_id: str) -> dict:
 async def create_member(
     payload: MemberCreateRequest, current_manager: dict = Depends(get_current_manager)
 ) -> dict:
+    email = normalize_email(payload.email) if payload.email else None
+    if email:
+        await member_accounts.ensure_email_available(email)
+
     member_id = gen_id("MEM")
     ts = now()
     existing_count = await members_col.count_documents({})
     color = payload.color_tag or _PALETTE[existing_count % len(_PALETTE)]
     doc = {
         "member_id": member_id,
-        "name": payload.name,
-        "role_title": payload.role_title,
+        "name": payload.name.strip(),
+        "role_title": payload.role_title.strip(),
         "discipline": payload.discipline.value,
-        "email": payload.email,
+        "email": email,
         "color_tag": color,
         "active": True,
         "created_at": ts,
@@ -55,18 +70,50 @@ async def create_member(
     }
     await members_col.insert_one(doc)
     doc.pop("_id", None)
-    return doc
+
+    if not email:
+        return {**doc, **member_accounts.public_access(None)}
+    issued = await member_accounts.issue_access_code(doc)
+    account = await member_accounts_col.find_one({"member_id": member_id}, {"_id": 0})
+    return {**doc, **member_accounts.public_access(account), "access_code": issued["access_code"]}
 
 
 @router.get("")
 async def list_members(current_manager: dict = Depends(get_current_manager)) -> list[dict]:
-    cursor = members_col.find({}, {"_id": 0}).sort("created_at", 1)
-    return await cursor.to_list(length=500)
+    members = await members_col.find({}, {"_id": 0}).sort("created_at", 1).to_list(length=500)
+    accounts = await member_accounts_col.find(
+        {"member_id": {"$in": [m["member_id"] for m in members]}}, {"_id": 0}
+    ).to_list(length=500)
+    account_by_id = {a["member_id"]: a for a in accounts}
+    return [{**m, **member_accounts.public_access(account_by_id.get(m["member_id"]))} for m in members]
 
 
 @router.get("/{member_id}")
 async def get_member(member_id: str, current_manager: dict = Depends(get_current_manager)) -> dict:
-    return await _get_member_or_404(member_id)
+    member = await _get_member_or_404(member_id)
+    account = await member_accounts_col.find_one({"member_id": member_id}, {"_id": 0})
+    return {**member, **member_accounts.public_access(account)}
+
+
+@router.post("/{member_id}/access")
+async def issue_member_access(member_id: str, current_manager: dict = Depends(get_current_manager)) -> dict:
+    """Generates a fresh one-time access code. Doubles as a password reset for an active member."""
+    member = await _get_member_or_404(member_id)
+    issued = await member_accounts.issue_access_code(member)
+    account = await member_accounts_col.find_one({"member_id": member_id}, {"_id": 0})
+    return {
+        "member_id": member_id,
+        "email": member.get("email"),
+        **member_accounts.public_access(account),
+        "access_code": issued["access_code"],
+    }
+
+
+@router.delete("/{member_id}/access", status_code=204)
+async def revoke_member_access(member_id: str, current_manager: dict = Depends(get_current_manager)) -> None:
+    await _get_member_or_404(member_id)
+    await member_accounts.revoke_access(member_id)
+    return None
 
 
 @router.patch("/{member_id}")
@@ -78,6 +125,10 @@ async def update_member(
         raise HTTPException(400, "No fields provided to update")
     if "discipline" in updates and hasattr(updates["discipline"], "value"):
         updates["discipline"] = updates["discipline"].value
+    if "email" in updates:
+        updates["email"] = normalize_email(updates["email"]) if updates["email"] else None
+        if updates["email"]:
+            await member_accounts.ensure_email_available(updates["email"], member_id)
     updates["updated_at"] = now()
 
     member = await members_col.find_one_and_update(
@@ -88,13 +139,18 @@ async def update_member(
     )
     if not member:
         raise HTTPException(404, "Team member not found")
-    return member
+    if "email" in updates:
+        await member_accounts.sync_account_email(member_id, updates["email"])
+    account = await member_accounts_col.find_one({"member_id": member_id}, {"_id": 0})
+    return {**member, **member_accounts.public_access(account)}
 
 
 @router.delete("/{member_id}", status_code=204)
 async def delete_member(member_id: str, current_manager: dict = Depends(get_current_manager)) -> None:
     await _get_member_or_404(member_id)
     await members_col.delete_one({"member_id": member_id})
+    await member_accounts.revoke_access(member_id)
+    await daily_reports_col.delete_many({"member_id": member_id})
     return None
 
 
