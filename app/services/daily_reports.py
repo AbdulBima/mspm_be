@@ -35,10 +35,7 @@ def window_payload(day: date) -> dict:
 
 
 async def active_sprint() -> dict | None:
-    sprint = await sprints_col.find_one({"status": SprintStatus.ACTIVE.value}, {"_id": 0})
-    if not sprint:
-        sprint = await sprints_col.find_one({}, {"_id": 0}, sort=[("created_at", -1)])
-    return sprint
+    return await sprints_col.find_one({"status": SprintStatus.ACTIVE.value}, {"_id": 0})
 
 
 def report_day(value: datetime | date) -> date:

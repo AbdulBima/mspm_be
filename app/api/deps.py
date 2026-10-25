@@ -31,8 +31,8 @@ async def _manager_from_claims(claims: dict) -> dict:
 
 async def _member_from_claims(claims: dict) -> dict:
     account = await member_accounts_col.find_one({"member_id": claims.get("member_id")}, {"_id": 0})
-    if not account or not account.get("password_hash"):
-        raise HTTPException(401, "Your access has been revoked. Ask your manager for a new access code.")
+    if not account or not account.get("password_hash") or claims.get("sid") != account.get("session_key"):
+        raise HTTPException(401, "Your session has ended. Sign in again.")
     member = await members_col.find_one({"member_id": claims.get("member_id")}, {"_id": 0})
     if not member:
         raise HTTPException(401, "Team member not found")

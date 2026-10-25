@@ -40,7 +40,14 @@ def issue_manager_token(manager: dict) -> str:
 
 
 def issue_member_token(account: dict) -> str:
-    return _encode({"sub": account["email"], "member_id": account["member_id"], "scope": MEMBER_TOKEN_SCOPE})
+    return _encode(
+        {
+            "sub": account["email"],
+            "member_id": account["member_id"],
+            "sid": account.get("session_key"),
+            "scope": MEMBER_TOKEN_SCOPE,
+        }
+    )
 
 
 def decode_token(token: str) -> dict:

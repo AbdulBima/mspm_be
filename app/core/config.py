@@ -15,9 +15,9 @@ process; tests can call `get_settings.cache_clear()` after monkeypatching
 from __future__ import annotations
 
 from functools import lru_cache
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     @property
     def is_dev(self) -> bool:
         return self.env == "development"
+
+    @field_validator("team_timezone")
+    @classmethod
+    def _valid_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as err:
+            raise ValueError(f"TEAM_TIMEZONE '{value}' is not a valid IANA timezone") from err
+        return value
 
     @property
     def team_tz(self) -> ZoneInfo:

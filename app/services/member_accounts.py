@@ -9,9 +9,11 @@ returned across the API can't leak a password or access-code hash.
 from __future__ import annotations
 
 import re
+import secrets
 from datetime import timedelta
 
 from fastapi import HTTPException
+from pymongo.errors import DuplicateKeyError
 
 from app.core.config import settings
 from app.core.security import hash_password, verify_password
@@ -54,9 +56,18 @@ def public_access(account: dict | None) -> dict:
 async def issue_access_code(member: dict) -> dict:
     if not member.get("email"):
         raise HTTPException(400, "Add an email address for this member before giving them access.")
+    await ensure_email_available(member["email"], member["member_id"])
     code = generate_access_code()
     ts = now()
     expires = ts + timedelta(hours=settings.member_access_code_ttl_hours)
+    try:
+        await _upsert_code(member, code, expires, ts)
+    except DuplicateKeyError as err:
+        raise HTTPException(409, "Another login already uses this email address.") from err
+    return {"access_code": code, "access_code_expires_at": expires}
+
+
+async def _upsert_code(member: dict, code: str, expires, ts) -> None:
     await member_accounts_col.update_one(
         {"member_id": member["member_id"]},
         {
@@ -70,7 +81,6 @@ async def issue_access_code(member: dict) -> dict:
         },
         upsert=True,
     )
-    return {"access_code": code, "access_code_expires_at": expires}
 
 
 async def revoke_access(member_id: str) -> None:
@@ -79,9 +89,12 @@ async def revoke_access(member_id: str) -> None:
 
 async def sync_account_email(member_id: str, email: str | None) -> None:
     if email:
-        await member_accounts_col.update_one(
-            {"member_id": member_id}, {"$set": {"email": normalize_email(email), "updated_at": now()}}
-        )
+        try:
+            await member_accounts_col.update_one(
+                {"member_id": member_id}, {"$set": {"email": normalize_email(email), "updated_at": now()}}
+            )
+        except DuplicateKeyError:
+            await revoke_access(member_id)
     else:
         await revoke_access(member_id)
 
@@ -104,10 +117,12 @@ async def activate(email: str, access_code: str, password: str) -> tuple[dict, d
         raise HTTPException(403, "Your account is paused. Contact your manager.")
 
     ts = now()
+    session_key = secrets.token_urlsafe(16)
     await member_accounts_col.update_one(
         {"member_id": account["member_id"]},
         {
             "$set": {
+                "session_key": session_key,
                 "password_hash": hash_password(password),
                 "access_code_hash": None,
                 "access_code_expires_at": None,
@@ -117,7 +132,7 @@ async def activate(email: str, access_code: str, password: str) -> tuple[dict, d
             }
         },
     )
-    return {**account, "activated_at": account.get("activated_at") or ts}, member
+    return {**account, "session_key": session_key, "activated_at": account.get("activated_at") or ts}, member
 
 
 async def authenticate(email: str, password: str) -> tuple[dict, dict] | None:

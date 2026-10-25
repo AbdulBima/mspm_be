@@ -12,6 +12,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import get_current_manager
+from app.core.config import settings
 from app.db.collections import daily_reports_col, member_accounts_col, members_col
 from app.services import daily_reports, member_accounts, report_window
 
@@ -34,8 +35,13 @@ async def reports_for_day(
     report_date: date | None = Query(None), current_manager: dict = Depends(get_current_manager)
 ) -> dict:
     day = report_date or daily_reports.today_local()
+    _, closes = report_window.window_for(day, settings.team_tz)
     members = (
-        await members_col.find({"active": {"$ne": False}}, {"_id": 0}).sort("name", 1).to_list(length=500)
+        await members_col.find(
+            {"active": {"$ne": False}, "created_at": {"$lt": closes.replace(tzinfo=None)}}, {"_id": 0}
+        )
+        .sort("name", 1)
+        .to_list(length=500)
     )
     accounts = await member_accounts_col.find({}, {"_id": 0}).to_list(length=500)
     account_by_id = {a["member_id"]: a for a in accounts}

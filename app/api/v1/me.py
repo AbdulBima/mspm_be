@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pymongo import ReturnDocument
 
 from app.api.deps import get_current_member
+from app.core.config import settings
 from app.db.collections import daily_reports_col, member_accounts_col, tasks_col
 from app.schemas.daily_reports import DailyReportSubmitRequest
 from app.services import daily_reports, member_accounts, report_window
@@ -41,7 +42,7 @@ _TASK_FIELDS = {
 def _sprint_brief(sprint: dict | None) -> dict | None:
     if not sprint:
         return None
-    day = sprint_day_number(sprint)
+    day = sprint_day_number(sprint, as_of=daily_reports.today_local())
     return {
         "sprint_id": sprint["sprint_id"],
         "name": sprint["name"],
@@ -160,8 +161,8 @@ async def my_report_history(
     by_day = {daily_reports.report_day(r["report_date"]): daily_reports.serialize(r) for r in reports}
 
     account = await member_accounts_col.find_one({"member_id": member["member_id"]}, {"_id": 0})
-    tracked_from = daily_reports.report_day(
-        (account or {}).get("activated_at") or member.get("created_at") or now()
+    tracked_from = report_window.local_today(
+        settings.team_tz, (account or {}).get("activated_at") or member.get("created_at") or now()
     )
 
     timeline = []
